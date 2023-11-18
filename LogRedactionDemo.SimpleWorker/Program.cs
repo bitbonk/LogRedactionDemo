@@ -29,7 +29,21 @@ public class Worker : BackgroundService
     }
 }
 
-public record User(string Id, [PersonalData] string Name, [PersonalData] string Email);
+public class User
+{
+    public User(string Id, string Name, string Email)
+    {
+        this.Id = Id;
+        this.Name = Name;
+        this.Email = Email;
+    }
+
+    public string Id { get; }
+
+    [PersonalData] public string Name { get; }
+
+    [PersonalData] public string Email { get; }
+}
 
 // logging code that logs the user
 public static partial class Log
