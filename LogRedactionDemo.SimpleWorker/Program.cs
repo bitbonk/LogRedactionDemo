@@ -1,8 +1,29 @@
+using System.Text.Json;
 using Microsoft.Extensions.Compliance.Classification;
+using Microsoft.Extensions.Compliance.Redaction;
 
 var builder = Host.CreateApplicationBuilder(args);
-builder.Services.AddLogging(lb => lb.EnableRedaction())
-    .AddHostedService<Worker>();
+builder.Services
+    .AddHostedService<Worker>()
+    .AddLogging(lb =>
+    {
+        lb.EnableRedaction();
+
+        // Log structured logs as JSON to console so we can see the actual structured data
+        lb.AddJsonConsole(o => o.JsonWriterOptions = new JsonWriterOptions { Indented = true });
+
+        // AddRedaction make sure the redactor provider is hooked up so that the logger can get a redactor
+        // bey default the ErasingRedactor is added as the fallback redactor which erases all data marked with any
+        // DataClassificationAttribute
+        // lb.Services.AddRedaction();
+
+        // This is how you can configure redactors in more detail
+        lb.Services.AddRedaction(rb =>
+            rb.SetRedactor<ErasingRedactor>(
+                    new DataClassificationSet(new DataClassification("MyTaxonomy", "MyClassification")))
+                .SetFallbackRedactor<NullRedactor>());
+    });
+
 var host = builder.Build();
 host.Run();
 
@@ -20,9 +41,7 @@ public class Worker : BackgroundService
         while (!stoppingToken.IsCancellationRequested)
         {
             if (_logger.IsEnabled(LogLevel.Information))
-            {
                 _logger.UserLoggedIn(new User("abcd", "Charles", "charles.mingus@bluenote.com"));
-            }
 
             await Task.Delay(1000, stoppingToken);
         }
@@ -48,8 +67,6 @@ public class User
 // logging code that logs the user
 public static partial class Log
 {
-    // Error LOGGEN035 : Parameter "user" of logging method "UserLoggedIn" has a sensitive field/property in its type (https://aka.ms/dotnet-extensions-warnings/LOGGEN035)
-    // Error CS8795 : Partial method 'Log.UserLoggedIn(ILogger, User)' must have an implementation part because it has accessibility modifiers.
     [LoggerMessage(LogLevel.Information, "User {User} logged in")]
     public static partial void UserLoggedIn(this ILogger logger, [LogProperties] User user);
 }
