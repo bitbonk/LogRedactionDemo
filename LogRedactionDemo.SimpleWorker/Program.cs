@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Text.Json;
 using Microsoft.Extensions.Compliance.Classification;
 using Microsoft.Extensions.Compliance.Redaction;
@@ -41,34 +42,51 @@ public class Worker : BackgroundService
         while (!stoppingToken.IsCancellationRequested)
         {
             if (_logger.IsEnabled(LogLevel.Information))
-                _logger.UserLoggedIn(new User("abcd", "Charles", "charles.mingus@bluenote.com"));
+            {
+                // Redacts the Name and Email properties of the User object, but not the InnerData property's RedactedData property, unless Transitive = true is set
+                _logger.UserLoggedIn(new User("abcd", "Charles", "charles.mingus@bluenote.com", new InnerUserData()));
+            }
 
             await Task.Delay(1000, stoppingToken);
         }
     }
 }
 
-public class User
+public record User
 {
-    public User(string Id, string Name, string Email)
+    public User(string Id, [PersonalData] string Name, [PersonalData] string Email, InnerUserData innerData)
     {
         this.Id = Id;
         this.Name = Name;
         this.Email = Email;
+        this.InnerData = innerData;
     }
 
     public string Id { get; }
 
-    [PersonalData] public string Name { get; }
+    [PersonalData] 
+    public string Name { get; }
 
-    [PersonalData] public string Email { get; }
+    [PersonalData] 
+    public string Email { get; }
+
+    public InnerUserData InnerData { get; }
+}
+
+public record InnerUserData
+{
+    [PersonalData]
+    public string RedactedData { get; } = Guid.NewGuid().ToString();
+    public string PublicData { get; } = DateTime.UtcNow.ToString(CultureInfo.InvariantCulture);
 }
 
 // logging code that logs the user
 public static partial class Log
 {
-    [LoggerMessage(LogLevel.Information, "User {User} logged in")]
-    public static partial void UserLoggedIn(this ILogger logger, [LogProperties] User user);
+    [LoggerMessage(LogLevel.Information, "User logged in")]
+#pragma warning disable EXTEXP0003 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
+    public static partial void UserLoggedIn(this ILogger logger, [LogProperties(Transitive = true)] User user);
+#pragma warning restore EXTEXP0003 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
 }
 
 public class PersonalDataAttribute : DataClassificationAttribute
